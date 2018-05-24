@@ -1,15 +1,9 @@
-export $(cat .env | xargs)
+RUN_PATH="run_forever.sh"
 
-redis-server &
+source "$RUN_PATH"
+read -p "PRESS[ANYKEY]TO TERMINATE PROCESSES." PRESSKEY
 
-python3 news_pipeline/news_monitor.py &
-python3 news_pipeline/news_fetcher.py &
-# python3 news_classfication/classifier_server.py &
-python3 news_pipeline/news_deduper.py &
-# python3 preference_model/clicklearner.py &
-
-echo"=================================================="
-read -p "PRESS[ANYKEY]TOTERMINATEPROCESSES." PRESSKEY
+# TODO: be careful of the coupling between run_forever.sh and launch.sh
 
 pkill -f news_monitor.py
 pkill -f news_fetcher.py
@@ -17,6 +11,6 @@ pkill -f news_deduper.py
 # pkill -f classifier_server.py
 # pkill -f clicklearner.py
 
-redis-cli shutdown
+# redis-cli shutdown
 
 unset $(cat .env | sed -E 's/(.*)=.*/\1/' | xargs)
