@@ -26,7 +26,7 @@ def clear_queue(queue_url, queue_name):
         message = amqp_client.get_message()
         if message is None:
             break
-        print(message)
+        print('---message: {}\n'.format(message))
         count += 1
     
     amqp_client.close()

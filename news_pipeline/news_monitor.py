@@ -2,18 +2,17 @@ import datetime
 import hashlib
 import os
 import sys
+import logging, coloredlogs
 
 import redis
 
-# for unregular import
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
-
 import news_client
 from cloud_amqp_client import AMQPClient
-# from config_reader import get_config
 
-# TODO is this the best way to address it?
-# config = get_config(os.path.join(os.path.dirname(__file__),'..','config', 'config.json'))
+logger = logging.getLogger(__name__)
+coloredlogs.install(level=os.environ.get('LOGGER_LEVEL', 'INFO'), logger=logger)
+
 config = os.environ
 REDIS_HOST = config['redis_host']
 REDIS_PORT = config['redis_port']
@@ -34,10 +33,11 @@ SLEEP_TIME_IN_SECONDS = 60
 NEWS_TIME_OUT_IN_SECONDS = 3600 * 24 * 3
 
 
-def run():
-    redis_client = redis.StrictRedis(REDIS_HOST, REDIS_PORT)
-    amqp_client = AMQPClient(SCRAPE_NEWS_TASK_QUEUE_URL, 
-                             SCRAPE_NEWS_TASK_QUEUE_NAME)
+def run(redis_host=REDIS_HOST, redis_port=REDIS_PORT, 
+        scrape_queue_url=SCRAPE_NEWS_TASK_QUEUE_URL, 
+        scrape_queue_name=SCRAPE_NEWS_TASK_QUEUE_NAME):
+    redis_client = redis.StrictRedis(redis_host, redis_port)
+    amqp_client = AMQPClient(scrape_queue_url, scrape_queue_name)
     amqp_client.connect()
 
     try:
@@ -56,16 +56,17 @@ def run():
                 redis_client.set(digest, True)
                 redis_client.expire(digest, NEWS_TIME_OUT_IN_SECONDS)
 
-                print(news)
+                logger.debug('News Monitor: got news {}'.format(news))
                 amqp_client.send_message(news)
 
-            print('News Monitor: fectched {} news'.format(num_news))
+            logger.info('News Monitor: fectched {} news'.format(num_news))
             amqp_client.sleep(SLEEP_TIME_IN_SECONDS)
     except KeyboardInterrupt:
         print('keyboard interrupt')
     # except SigTerm
     finally:
         amqp_client.close()
+
 
 if __name__ == '__main__':
     run()

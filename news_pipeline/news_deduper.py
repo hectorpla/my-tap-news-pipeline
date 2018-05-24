@@ -1,6 +1,7 @@
 import datetime
 import os
 import sys
+import logging, coloredlogs
 
 from dateutil import parser
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -9,11 +10,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__),'..','utils'))
 import mongodb_client
 import classifier_client
 from cloud_amqp_client import AMQPClient
-# from config_reader import get_config
 
+logger = logging.getLogger(__name__)
+coloredlogs.install(level=os.environ.get('LOGGER_LEVEL', 'INFO'), logger=logger)
 
 # TODO: this global are bad, and makes it uncovered by tests
-# config = get_config(os.path.join(os.path.dirname(__file__),'..','config', 'config.json'))
 config = os.environ
 DB_NAME = config['news_db']
 COLLECTION_NAME = config['new_collection']
@@ -29,19 +30,21 @@ assert dedupe_queue_client.is_connected()
 
 NEWS_SIMILARITY_THRESHOLD = 0.8
 
+
 class NotContainPublishTimeError(Exception):
     def __str__(self):
         return 'News not containing publish time!!!'
 
+
 def handle_message(msg):
-    # print('dedupter handling message', msg)
+    logger.debug('dedupter handling message: {}'.format(msg))
     if msg is None or not isinstance(msg, dict):
-        print('News Deduper: message is broken')
+        logger.info('News Deduper: message is broken')
         return
 
     task = msg
     if 'text' not in task or not task['text']:
-        print('News Deduper publishedAt, not containing text')
+        logger.info('News Deduper publishedAt, not containing text')
         return
 
     if 'publishedAt' not in task or not task['publishedAt']:
@@ -55,7 +58,7 @@ def handle_message(msg):
     day_end = day_begin + datetime.timedelta(days=1)
 
     news_collection = mongodb_client.get_db(DB_NAME).get_collection(COLLECTION_NAME)
-    
+
     # efficiency problem if the db grows
     news_on_the_day = news_collection.find({
         'publishedAt': {'$gte': day_begin, '$lt': day_end}
@@ -66,11 +69,11 @@ def handle_message(msg):
 
     tf_idf = TfidfVectorizer().fit_transform(documents)
     similarity_matrix = tf_idf * tf_idf.T
-    # print('News Deduper', similarity_matrix)
+    logger.debug('News Deduper: similar matrix:\n{}'.format(similarity_matrix))
 
     num_rows = similarity_matrix.shape[0]
     if any(similarity_matrix[0, i] > NEWS_SIMILARITY_THRESHOLD for i in range(1, num_rows)):
-        print('News Deduper: similar document, throw it away')
+        logger.info('News Deduper: similar document, throw it away')
         return
 
     # reformat the published date
@@ -82,10 +85,12 @@ def handle_message(msg):
         try:
             task['category'] = classifier_client.classify(task['title'])
         except Exception as e:
-            print("News Deduper: failed to classify using the classifier client", e)
+            logger.info("News Deduper: failed to classify using the classifier client -> error: {}"
+                .format(e))
             
-    print('News Deduper: putting into database', task['digest'])
+    logger.info('News Deduper: putting into database (digest: {})'.format(task['digest']))
     news_collection.replace_one({'digest': task['digest']}, task, upsert=True)
+
 
 def run(times=-1):
     while True:
@@ -94,10 +99,11 @@ def run(times=-1):
             try:
                 handle_message(msg)
             except NotContainPublishTimeError as e:
-                print("News Deduper:", e)
+                logger.warning("News Deduper: {}".format(e))
         dedupe_queue_client.sleep(SLEEP_TIME_IN_SECONDS)
         if times > 0: times -= 1
         if times == 0: break
+
 
 if __name__ == '__main__':
     run()

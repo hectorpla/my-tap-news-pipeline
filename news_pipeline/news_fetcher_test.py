@@ -9,15 +9,6 @@ import news_client
 from cloud_amqp_client import AMQPClient
 import queue_cleaner
 
-# from config_reader import get_config
-# config = get_config('../config/config.json')
-config = os.environ
-
-SCRAPE_QUEUE_URL = config["scrape_task_queue_url"]
-DEDUPE_QUEUE_URL = config["dedupe_task_queue_url"]
-SCRAPE_NEWS_TASK_QUEUE_NAME = config["scrape_task_queue_name"]
-DEDUPE_NEWS_TASK_QUEUE_NAME = config["dedupe_task_queue_name"]
-
 TEST_SCRAPE_TASK = [
     'not a dict',
     {
@@ -38,15 +29,21 @@ TEST_SCRAPE_TASK = [
     }
 ]
 
+SCRAPE_QUEUE_URL = 'http://localhost'
+SCRAPE_NEWS_TASK_QUEUE_NAME = 'fetch-queue-test'
+DEDUPE_QUEUE_URL = 'http://localhost'
+DEDUPE_NEWS_TASK_QUEUE_NAME = 'dedupe-queue-test'
+
 REDIS_HOST = 'localhost'
 REDIS_PORT = '6379'
 redis_client = redis.StrictRedis(REDIS_HOST, REDIS_PORT)
 
 def test_basic():
     print('news_fetcher_test: cleaning all queues...')
-    queue_cleaner.clear_all()
+    queue_cleaner.clear_queue(SCRAPE_QUEUE_URL, SCRAPE_NEWS_TASK_QUEUE_NAME)
+    queue_cleaner.clear_queue(DEDUPE_QUEUE_URL, DEDUPE_NEWS_TASK_QUEUE_NAME)
     print('flushing all cache in Redis')
-    redis_client.flushall() # TODO dangerous to run when deployed
+    redis_client.flushall()
 
     scrape_queue_client = AMQPClient(SCRAPE_QUEUE_URL, SCRAPE_NEWS_TASK_QUEUE_NAME)
     scrape_queue_client.connect()
@@ -59,7 +56,10 @@ def test_basic():
 
     print('getting messages from the queue and process...')
     news_fetcher.SLEEP_TIME_IN_SECONDS = 1
-    news_fetcher.run(len(TEST_SCRAPE_TASK))
+    news_fetcher.run(times=len(TEST_SCRAPE_TASK), scrape_queue_url=SCRAPE_QUEUE_URL,
+                     scrape_queue_name=SCRAPE_NEWS_TASK_QUEUE_NAME, 
+                     dedupe_queue_url=DEDUPE_QUEUE_URL, 
+                     dedupe_queue_name=DEDUPE_NEWS_TASK_QUEUE_NAME)
 
     should_be_empty_msg = scrape_queue_client.get_message()
     print('news_fetcher_test(expecting None):', should_be_empty_msg)

@@ -3,37 +3,36 @@ import os, sys
 from multiprocessing import Process
 
 import news_monitor
+import redis
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 import news_client
 from cloud_amqp_client import AMQPClient
 from queue_cleaner import clear_queue
-# from config_reader import get_config
 
-# config = get_config('../config/config.json')
+QUEUE_URL =  'http://localhost'
+QUEUE_NAME = 'fetch-queue-test'
 
-config = os.environ
+REDIS_HOST = 'localhost'
+REDIS_PORT = 6379
 
-QUEUE_URL =  config['scrape_task_queue_url']
-QUEUE_NAME = config['scrape_task_queue_name']
-
-# TODO: don't do this test after the service is online,
-# otherwise, try doing it on another queue and redis server
+# TODO: this test is not unit test, it involves network connction like mq
 def test_monitor_basic():
     news_monitor.NEWS_SOURCES = news_client.MOCK_SOURCES
     MOCK_DATA = news_client.MOCK_DATA
 
     print('test_monitor_basic: cleaning queue "{}" first---------'.format(QUEUE_NAME))
     clear_queue(QUEUE_URL, QUEUE_NAME)
-    # TODO redis server flush all
-    news_monitor.redis_client.flushall()
-
+    # TODO: redis server flush all
+    redis_client = redis.StrictRedis(REDIS_HOST, REDIS_PORT)
+    redis_client.flushall()
 
     print('test_monitor_basic: adding message to queue "{}"--------'.format(QUEUE_NAME))
     amqp_client = AMQPClient(QUEUE_URL, QUEUE_NAME)
     amqp_client.connect()
 
-    proc = Process(target=news_monitor.run, name='monitor_run')
+    proc = Process(target=news_monitor.run, name='monitor_run', 
+        args=(REDIS_HOST, REDIS_PORT, QUEUE_URL, QUEUE_NAME))
     proc.start()
     print('test_monitor_basic: executing... (wait for 2 seconds to cut)')
     time.sleep(2)
