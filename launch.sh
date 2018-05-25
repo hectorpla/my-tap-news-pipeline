@@ -13,4 +13,4 @@ pkill -f news_deduper.py
 
 # redis-cli shutdown
 
-unset $(cat .env | sed -E 's/(.*)=.*/\1/' | xargs)
+# unset $(cat .env | sed -E 's/(.*)=.*/\1/' | xargs)

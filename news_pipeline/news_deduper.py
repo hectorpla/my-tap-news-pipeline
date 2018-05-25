@@ -94,6 +94,7 @@ def handle_message(msg):
 
 def run(times=-1):
     while True:
+        logger.debug('News fetcher: iter..')
         msg = dedupe_queue_client.get_message()
         if msg is not None:
             try:

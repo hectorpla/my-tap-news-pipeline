@@ -40,32 +40,27 @@ def run(redis_host=REDIS_HOST, redis_port=REDIS_PORT,
     amqp_client = AMQPClient(scrape_queue_url, scrape_queue_name)
     amqp_client.connect()
 
-    try:
-        while True:
-            news_list = news_client.get_news_from_sources(NEWS_SOURCES)
-            num_news = 0
+    while True:
+        logger.debug('News monitor: iter..')
+        news_list = news_client.get_news_from_sources(NEWS_SOURCES)
+        num_news = 0
 
-            for news in news_list:
-                digest = hashlib.md5(news['title'].encode('utf-8')).hexdigest()
+        for news in news_list:
+            digest = hashlib.md5(news['title'].encode('utf-8')).hexdigest()
 
-                if redis_client.get(digest):
-                    continue
+            if redis_client.get(digest):
+                continue
 
-                num_news += 1
-                news['digest'] = digest
-                redis_client.set(digest, True)
-                redis_client.expire(digest, NEWS_TIME_OUT_IN_SECONDS)
+            num_news += 1
+            news['digest'] = digest
+            redis_client.set(digest, True)
+            redis_client.expire(digest, NEWS_TIME_OUT_IN_SECONDS)
 
-                logger.debug('News Monitor: got news {}'.format(news))
-                amqp_client.send_message(news)
+            logger.debug('News Monitor: got news {}'.format(news))
+            amqp_client.send_message(news)
 
-            logger.info('News Monitor: fectched {} news'.format(num_news))
-            amqp_client.sleep(SLEEP_TIME_IN_SECONDS)
-    except KeyboardInterrupt:
-        print('keyboard interrupt')
-    # except SigTerm
-    finally:
-        amqp_client.close()
+        logger.info('News Monitor: fectched {} news'.format(num_news))
+        amqp_client.sleep(SLEEP_TIME_IN_SECONDS)
 
 
 if __name__ == '__main__':

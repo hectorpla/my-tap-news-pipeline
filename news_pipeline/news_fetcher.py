@@ -39,7 +39,6 @@ def handle_message(msg):
     aritcle.parse()
 
     task['text'] = aritcle.text
-    
 
 
 def run(scrape_queue_url=SCRAPE_QUEUE_URL, scrape_queue_name=SCRAPE_NEWS_TASK_QUEUE_NAME,
@@ -54,6 +53,7 @@ def run(scrape_queue_url=SCRAPE_QUEUE_URL, scrape_queue_name=SCRAPE_NEWS_TASK_QU
     assert dedupe_queue_client.is_connected()
 
     while True:
+        logger.debug('News fetcher: iter..')
         msg = scrape_queue_client.get_message()
         if msg is not None:
             try:
